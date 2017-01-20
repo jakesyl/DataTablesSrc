@@ -328,6 +328,7 @@ function _fnDraw( oSettings )
 
 	var i, iLen, n;
 	var anRows = [];
+	var newRows = [];
 	var iRowCount = 0;
 	var asStripeClasses = oSettings.asStripeClasses;
 	var iStripes = asStripeClasses.length;
@@ -377,17 +378,19 @@ function _fnDraw( oSettings )
 
 		for ( var j=iStart ; j<iEnd ; j++ )
 		{
+			var newRow = false;
 			var iDataIndex = aiDisplay[j];
 			var aoData = oSettings.aoData[ iDataIndex ];
 			if ( aoData.nTr === null )
 			{
+				newRow = true;
 				_fnCreateTr( oSettings, iDataIndex );
 			}
 
 			var nRow = aoData.nTr;
 
 			/* Remove the old striping classes and then add the new one */
-			if ( iStripes !== 0 )
+			if ( iStripes !== 0 ) //these will no longer work
 			{
 				var sStripe = asStripeClasses[ iRowCount % iStripes ];
 				if ( aoData._sRowStripe != sStripe )
@@ -403,6 +406,9 @@ function _fnDraw( oSettings )
 			_fnCallbackFire( oSettings, 'aoRowCallback', null,
 				[nRow, aoData._aData, iRowCount, j] );
 
+            if(newRow){
+                newRows.push(nRow['_DT_RowIndex']);
+            }
 			anRows.push( nRow );
 			iRowCount++;
 		}
@@ -437,8 +443,69 @@ function _fnDraw( oSettings )
 
 	var body = $(oSettings.nTBody);
 
-	body.children().detach();
-	body.append( $(anRows) );
+	if(oSettings.search) {
+        var currentIndex = 0;
+        var previousRow;
+        anRows.forEach(function (row) {
+            var tableIndex = _getTableIndex(oSettings);
+            if (tableIndex.indexOf(row['_DT_RowIndex']) == -1) { //if it's a new row
+                var rowToPrependTo; // establish scope
+                var append = false;
+                try {
+                    var rowToAttachTo = anRows[currentIndex + 1]['_DT_RowIndex'];
+                } catch (err) {
+                    append = true;
+                }
+                var loopCounter = 0;
+                while (typeof rowToPrependTo == 'undefined') {
+                    body.children().each(function () { //loop through the current table so we can see where to put the new element
+                        if (this['_DT_RowIndex'] == rowToAttachTo) {
+                            rowToPrependTo = this;
+                            return false;
+                        }
+                    });
+                    if (typeof rowToPrependTo == 'undefined') {
+                        loopCounter++;
+                        try {
+                            rowToAttachTo = anRows[currentIndex + 1 + loopCounter]['_DT_RowIndex'];
+                        }
+                        catch (err) {
+                            append = true;
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+
+                if (!(append)) {
+                    $(row).hide().insertBefore($(rowToPrependTo)).fadeIn(400); //add the new row
+                } else {
+                    if (body.children().length > 0) {
+                        $(row).hide().insertAfter($(body.children()[body.children().length - 1])).fadeIn(400);
+                    } else {
+                        $(row).hide().appendTo($(body)).fadeIn(400);
+                    }
+                }
+                //body being the current table....
+            }
+            currentIndex++;
+        });
+
+        body.children().each(function () {
+            if (aiDisplay.indexOf(this['_DT_RowIndex']) == -1) {
+                $(this).fadeOut(400, function () {
+                    $(this).detach();
+                });
+            }
+        });
+    }else{
+		body.children().detach();
+        body.append( $(anRows) );
+
+	}
+
+
 
 	/* Call all required callback functions for the end of a draw */
 	_fnCallbackFire( oSettings, 'aoDrawCallback', 'draw', [oSettings] );
@@ -488,7 +555,16 @@ function _fnReDraw( settings, holdPosition )
 
 	settings._drawHold = false;
 }
-
+/**
+ * get the index of the table
+ */
+function _getTableIndex( oSettings ){
+    var index = [];
+    $(oSettings.nTBody).children().each(function(){
+        index.push(this['_DT_RowIndex']);
+    });
+    return index;
+}
 
 /**
  * Add the options to the page HTML for the table
